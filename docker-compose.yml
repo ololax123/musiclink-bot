@@ -1,0 +1,22 @@
+services:
+  musiclink-bot:
+    image: ghcr.io/ololax123/musiclink-bot:latest   # from the GitHub pipeline
+    # build: .                                           # or build locally instead
+    container_name: musiclink-bot
+    restart: unless-stopped
+    environment:
+      SIGNAL_BACKEND: rest                         # rest = bbernhard/signal-cli-rest-api, jsonrpc = signal-cli daemon --tcp
+      SIGNAL_URL: http://signal-cli-rest-api:8080  # container name of your signal instance
+      SIGNAL_NUMBER: "+358XXXXXXXXX"               # the account signal-cli is registered as
+      REST_RECEIVE: ws                             # ws if MODE=json-rpc, poll if MODE=normal/native
+      DIRECTIONS: both                             # both | am2sp | sp2am
+      COUNTRY: FI
+      # ALLOWED_CHATS: "group.abc123==,+358401234567"
+      # SPOTIFY_CLIENT_ID: ""
+      # SPOTIFY_CLIENT_SECRET: ""
+    networks: [signal]
+
+networks:
+  signal:
+    external: true
+    name: signal_default    # the network your signal-cli container is on (docker network ls)
