@@ -59,10 +59,50 @@ func resolveRedirect(u string) string {
 
 // ---------------------------------------------------------------- Odesli
 
+// odesliBase is a variable so tests can point it at a fake server.
+var odesliBase = "https://api.song.link/v1-alpha.1/links"
+
+// When Odesli rejects us (401/403, e.g. no or invalid key) we stop calling it
+// for a while instead of failing every lookup, and rely on the fallback.
+var odesliBlock struct {
+	sync.Mutex
+	until time.Time
+}
+
+const odesliBlockFor = time.Hour
+
+func odesliBlocked() bool {
+	odesliBlock.Lock()
+	defer odesliBlock.Unlock()
+	return time.Now().Before(odesliBlock.until)
+}
+
+func blockOdesli(code int) {
+	odesliBlock.Lock()
+	defer odesliBlock.Unlock()
+	odesliBlock.until = time.Now().Add(odesliBlockFor)
+	hint := "set ODESLI_API_KEY"
+	if cfg.OdesliKey != "" {
+		hint = "check ODESLI_API_KEY"
+	}
+	fallback := "using the Spotify API fallback"
+	if !spotifyConfigured() {
+		fallback = "and no fallback is configured: set SPOTIFY_CLIENT_ID / SPOTIFY_CLIENT_SECRET"
+	}
+	log.Printf("WARNING odesli rejected the request (HTTP %d): %s. Pausing Odesli for %s, %s.",
+		code, hint, odesliBlockFor, fallback)
+}
+
 // odesli returns the link for platform ("spotify" or "appleMusic").
 func odesli(link, platform string) string {
+	if !cfg.UseOdesli || odesliBlocked() {
+		return ""
+	}
 	q := url.Values{"url": {link}, "userCountry": {cfg.Country}}
-	u := "https://api.song.link/v1-alpha.1/links?" + q.Encode()
+	if cfg.OdesliKey != "" {
+		q.Set("key", cfg.OdesliKey) // Odesli takes the key as a query parameter
+	}
+	u := odesliBase + "?" + q.Encode()
 	for attempt := 1; attempt <= 3; attempt++ {
 		var d struct {
 			LinksByPlatform map[string]struct {
@@ -77,6 +117,10 @@ func odesli(link, platform string) string {
 			if he.Code == 429 {
 				time.Sleep(time.Duration(7*attempt) * time.Second)
 				continue
+			}
+			if he.Code == 401 || he.Code == 403 {
+				blockOdesli(he.Code)
+				return ""
 			}
 			if he.Code != 400 && he.Code != 404 {
 				log.Printf("odesli: %v", err)
@@ -96,6 +140,8 @@ var spTok struct {
 	value string
 	exp   time.Time
 }
+
+func spotifyConfigured() bool { return cfg.SpotifyID != "" && cfg.SpotifySecret != "" }
 
 func spotifyToken() (string, error) {
 	spTok.Lock()
@@ -208,7 +254,7 @@ func itunes(path string, params url.Values) (itunesResult, error) {
 }
 
 func fallbackAM2SP(link string) string {
-	if cfg.SpotifyID == "" || cfg.SpotifySecret == "" {
+	if !spotifyConfigured() {
 		return ""
 	}
 	kind, id := appleKindID(link)
@@ -248,7 +294,7 @@ func fallbackAM2SP(link string) string {
 }
 
 func fallbackSP2AM(link string) string {
-	if cfg.SpotifyID == "" || cfg.SpotifySecret == "" {
+	if !spotifyConfigured() {
 		return ""
 	}
 	kind, id := spotifyKindID(link)

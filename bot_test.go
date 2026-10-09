@@ -229,3 +229,38 @@ func TestJSONRPCE2E(t *testing.T) {
 		t.Fatal("timeout waiting for send")
 	}
 }
+
+// Odesli: key goes in the query string; 401 pauses Odesli instead of retrying every lookup.
+func TestOdesliKeyAnd401(t *testing.T) {
+	setup(t)
+	var calls int
+	var gotKey string
+	status := http.StatusOK
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		gotKey = r.URL.Query().Get("key")
+		w.WriteHeader(status)
+		if status == http.StatusOK {
+			w.Write([]byte(`{"linksByPlatform":{"spotify":{"url":"` + spURL + `"}}}`))
+		}
+	}))
+	defer srv.Close()
+	old := odesliBase
+	odesliBase = srv.URL
+	defer func() { odesliBase = old; odesliBlock.until = time.Time{} }()
+
+	cfg.OdesliKey = "secret123"
+	if got := odesli(amURL, "spotify"); got != spURL || gotKey != "secret123" {
+		t.Fatalf("got %q key %q", got, gotKey)
+	}
+
+	status = http.StatusUnauthorized
+	if got := odesli(amURL, "spotify"); got != "" || !odesliBlocked() {
+		t.Fatalf("401 should return empty and pause odesli (got %q)", got)
+	}
+	before := calls
+	odesli(amURL, "spotify")
+	if calls != before {
+		t.Fatal("odesli should not be called while paused")
+	}
+}

@@ -81,7 +81,9 @@ Home Assistant's Signal integration) also reads from the same container, use
 | `REPLY_AS_QUOTE` | `1` | Quote the original message |
 | `REPLY_NOT_FOUND` | `0` | Reply "no match found" when a lookup fails |
 | `LOOP_TTL` | `3600` | Seconds the bot remembers links it posted |
-| `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` | — | Optional fallback lookup (free app at developer.spotify.com) |
+| `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` | — | Spotify API lookup, used when Odesli fails (recommended, see Lookups) |
+| `ODESLI_API_KEY` | — | Odesli key, if you have one |
+| `USE_ODESLI` | `1` | `0` = skip Odesli and use only the Spotify API |
 | `LOG_LEVEL` | `INFO` | `DEBUG` for more detail |
 | `SIGNAL_HOST` / `SIGNAL_PORT` | `signal-cli` / `7583` | Only for the `jsonrpc` backend |
 
@@ -100,6 +102,16 @@ The bot never translates its own replies:
 
 ## Lookups
 
-Uses the free song.link (Odesli) API, ~10 requests/min without a key; the bot
-retries on rate limits and caches results. `spotify.link` short links are
-resolved first. Apple Music playlists have no 1:1 equivalent and are skipped.
+1. **Odesli / song.link** is tried first. It may answer with HTTP 401 when
+   called without a key. Odesli takes the key as a `key` query parameter
+   (`ODESLI_API_KEY`), but it has stopped issuing new keys. When Odesli
+   rejects a request, the bot logs a warning and pauses Odesli for an hour
+   instead of failing every lookup.
+2. **Spotify Web API + iTunes Search** is the fallback, and the reliable path
+   if Odesli blocks you. It needs a free Spotify app: create one at
+   https://developer.spotify.com/dashboard (any name; redirect URI
+   `http://127.0.0.1/` is fine; tick *Web API*) and set `SPOTIFY_CLIENT_ID` /
+   `SPOTIFY_CLIENT_SECRET`. To skip Odesli entirely, set `USE_ODESLI=0`.
+
+Results are cached. `spotify.link` short links are resolved first. Apple Music
+playlists have no 1:1 equivalent and are skipped.

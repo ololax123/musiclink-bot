@@ -36,6 +36,8 @@ type Config struct {
 	ReplyAsQuote   bool
 	ReplyNotFound  bool
 	LoopTTLSeconds int
+	UseOdesli      bool
+	OdesliKey      string
 	SpotifyID      string
 	SpotifySecret  string
 	Debug          bool
@@ -73,6 +75,8 @@ func loadConfig() Config {
 		ReplyAsQuote:   getenv("REPLY_AS_QUOTE", "1") == "1",
 		ReplyNotFound:  getenv("REPLY_NOT_FOUND", "0") == "1",
 		LoopTTLSeconds: ttl,
+		UseOdesli:      getenv("USE_ODESLI", "1") == "1",
+		OdesliKey:      getenv("ODESLI_API_KEY", ""),
 		SpotifyID:      getenv("SPOTIFY_CLIENT_ID", ""),
 		SpotifySecret:  getenv("SPOTIFY_CLIENT_SECRET", ""),
 		Debug:          strings.EqualFold(getenv("LOG_LEVEL", "INFO"), "DEBUG"),
@@ -93,7 +97,14 @@ type Transport interface {
 func main() {
 	log.SetFlags(log.LstdFlags)
 	cfg = loadConfig()
-	log.Printf("musiclink-bot: backend=%s directions=%s country=%s", cfg.Backend, cfg.Directions, cfg.Country)
+	log.Printf("musiclink-bot: backend=%s directions=%s country=%s odesli=%v odesli_key=%v spotify_api=%v",
+		cfg.Backend, cfg.Directions, cfg.Country, cfg.UseOdesli, cfg.OdesliKey != "", spotifyConfigured())
+	if !spotifyConfigured() {
+		if !cfg.UseOdesli {
+			log.Fatal("USE_ODESLI=0 needs SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET, otherwise nothing can be looked up")
+		}
+		log.Print("WARNING no SPOTIFY_CLIENT_ID/SPOTIFY_CLIENT_SECRET: lookups depend entirely on Odesli")
+	}
 
 	var t Transport
 	switch cfg.Backend {

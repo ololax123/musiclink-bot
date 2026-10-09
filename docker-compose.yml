@@ -12,8 +12,11 @@ services:
       DIRECTIONS: both                             # both | am2sp | sp2am
       COUNTRY: FI
       # ALLOWED_CHATS: "group.abc123==,+358401234567"
-      # SPOTIFY_CLIENT_ID: ""
-      # SPOTIFY_CLIENT_SECRET: ""
+      # Lookups: Odesli first, Spotify API as fallback (recommended, see README)
+      SPOTIFY_CLIENT_ID: ""
+      SPOTIFY_CLIENT_SECRET: ""
+      # ODESLI_API_KEY: ""                         # if you have one
+      # USE_ODESLI: "0"                            # skip Odesli, Spotify API only
     networks: [signal]
 
 networks:
